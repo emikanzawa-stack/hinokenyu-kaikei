@@ -1,20 +1,240 @@
-日野剣友会 会計ヘルパー
-表示期間
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>日野剣友会 会計ヘルパー</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif; background: #f5f5f5; color: #1a1a1a; padding: 16px; max-width: 480px; margin: 0 auto; }
+  h1 { font-size: 17px; font-weight: 600; margin-bottom: 16px; }
+  .month-row { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; background: #fff; border-radius: 12px; padding: 12px; border: 0.5px solid #e0e0e0; }
+  .month-row label { font-size: 14px; color: #666; white-space: nowrap; }
+  .month-row select { flex: 1; font-size: 15px; border: none; outline: none; background: transparent; }
+  .sec-label { font-size: 13px; color: #666; font-weight: 500; margin: 0 0 10px; }
+  .entry-card { background: #fff; border: 0.5px solid #e0e0e0; border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+  .entry-card .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+  .entry-card .row-single { margin-bottom: 8px; }
+  .field-label { font-size: 11px; color: #999; margin-bottom: 3px; }
+  .entry-card input, .entry-card select { font-size: 15px; width: 100%; border: 0.5px solid #e0e0e0; border-radius: 8px; padding: 8px 10px; outline: none; background: #fafafa; }
+  .entry-card input[type="number"] { text-align: right; }
+  .entry-card input:focus, .entry-card select:focus { border-color: #aaa; background: #fff; }
+  .remove-row { display: flex; justify-content: flex-end; margin-top: 4px; }
+  .remove-btn { background: none; border: none; cursor: pointer; color: #999; font-size: 13px; padding: 4px 0; }
+  .add-btn { width: 100%; font-size: 14px; padding: 12px; margin-bottom: 20px; background: #fff; border: 0.5px dashed #ccc; border-radius: 12px; cursor: pointer; color: #666; }
+  .add-btn:active { background: #f0f0f0; }
+  .save-btn { width: 100%; font-size: 15px; padding: 14px; margin-bottom: 8px; background: #1a73e8; color: #fff; border: none; border-radius: 12px; cursor: pointer; font-weight: 500; }
+  .save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .save-btn:active { background: #1557b0; }
+  .save-status { font-size: 13px; text-align: center; margin-bottom: 16px; min-height: 20px; color: #666; }
+  .save-status.success { color: #1e8a44; }
+  .save-status.error { color: #d32f2f; }
+  .divider { border: none; border-top: 0.5px solid #e0e0e0; margin: 20px 0; }
+  .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+  .metric { background: #fff; border-radius: 12px; padding: 12px; border: 0.5px solid #e0e0e0; }
+  .metric-label { font-size: 12px; color: #999; margin-bottom: 4px; }
+  .metric-value { font-size: 20px; font-weight: 500; }
+  .metric-value.income { color: #1e8a44; }
+  .metric-value.expense { color: #d32f2f; }
+  .metric-wide { grid-column: 1 / -1; }
+  .export-area { background: #fff; border-radius: 12px; padding: 12px; font-size: 11px; line-height: 1.7; white-space: pre-wrap; font-family: 'Courier New', monospace; color: #333; margin-bottom: 10px; overflow-x: auto; border: 0.5px solid #e0e0e0; }
+  .copy-btn { width: 100%; font-size: 14px; padding: 12px; background: #fff; border: 0.5px solid #ccc; border-radius: 12px; cursor: pointer; color: #333; }
+  .copy-btn:active { background: #f0f0f0; }
+</style>
+</head>
+<body>
+<h1>日野剣友会 会計ヘルパー</h1>
 
-収入
+<div class="month-row">
+  <label>表示期間</label>
+  <select id="target-month"></select>
+</div>
 
-＋ 収入を追加
-支出
+<p class="sec-label">収入</p>
+<div id="income-rows"></div>
+<button class="add-btn" onclick="addRow('income')">＋ 収入を追加</button>
 
-＋ 支出を追加 スプレッドシートに保存
+<p class="sec-label">支出</p>
+<div id="expense-rows"></div>
+<button class="add-btn" onclick="addRow('expense')">＋ 支出を追加</button>
 
+<button class="save-btn" id="save-btn" onclick="saveToSheets()">スプレッドシートに保存</button>
+<p class="save-status" id="save-status"></p>
 
-収入合計
-¥0
-支出合計
-¥0
-収支差額
-¥0
-レポート（コピー用）
-項目を入力するとレポートが生成されます
-レポートをコピー
+<hr class="divider">
+
+<div class="metrics">
+  <div class="metric">
+    <p class="metric-label">収入合計</p>
+    <p class="metric-value income" id="total-income">¥0</p>
+  </div>
+  <div class="metric">
+    <p class="metric-label">支出合計</p>
+    <p class="metric-value expense" id="total-expense">¥0</p>
+  </div>
+  <div class="metric metric-wide">
+    <p class="metric-label">収支差額</p>
+    <p class="metric-value" id="total-balance">¥0</p>
+  </div>
+</div>
+
+<p class="sec-label">レポート（コピー用）</p>
+<div class="export-area" id="export-text">項目を入力するとレポートが生成されます</div>
+<button class="copy-btn" onclick="copyReport()">レポートをコピー</button>
+
+<script>
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxhfufrynJCNH-HiELIJqiyAnNccmFuR1skIi86gE0oprwtFIT5TLc9e25wmJGojGwwbA/exec';
+const INCOME_CATS = ['繰越金','会費','BBQ会費','利息','PTAスポレク講師料','会費返金'];
+const EXPENSE_CATS = ['交通費','年会費','参加費','活動費','保険(手数料等込)','雑費'];
+const MONTHS = ['2026年4月','2026年5月','2026年6月','2026年7月','2026年8月','2026年9月','2026年10月','2026年11月','2026年12月','2027年1月','2027年2月','2027年3月'];
+
+let incomeRows = [], expenseRows = [], rowId = 0;
+
+function initMonth() {
+  const sel = document.getElementById('target-month');
+  const allOpt = document.createElement('option');
+  allOpt.value = '通年'; allOpt.textContent = '通年';
+  sel.appendChild(allOpt);
+  MONTHS.forEach(m => {
+    const o = document.createElement('option');
+    o.value = m; o.textContent = m; sel.appendChild(o);
+  });
+  sel.value = '通年';
+  sel.addEventListener('change', updateSummary);
+}
+
+function addRow(type) {
+  const id = rowId++;
+  const arr = type === 'income' ? incomeRows : expenseRows;
+  arr.push({ id, date: '', name: '', category: type === 'income' ? INCOME_CATS[0] : EXPENSE_CATS[0], amount: '' });
+  renderRows(type);
+}
+
+function removeRow(type, id) {
+  if (type === 'income') incomeRows = incomeRows.filter(r => r.id !== id);
+  else expenseRows = expenseRows.filter(r => r.id !== id);
+  renderRows(type); updateSummary();
+}
+
+function renderRows(type) {
+  const arr = type === 'income' ? incomeRows : expenseRows;
+  const cats = type === 'income' ? INCOME_CATS : EXPENSE_CATS;
+  const container = document.getElementById(type + '-rows');
+  container.innerHTML = arr.map(row => `
+    <div class="entry-card">
+      <div class="row">
+        <div><p class="field-label">日付</p>
+          <input type="text" placeholder="例：4/5" value="${row.date}" oninput="updateField('${type}',${row.id},'date',this.value)" /></div>
+        <div><p class="field-label">金額（円）</p>
+          <input type="number" placeholder="0" value="${row.amount}" min="0" step="100" oninput="updateField('${type}',${row.id},'amount',this.value)" /></div>
+      </div>
+      <div class="row-single"><p class="field-label">摘要</p>
+        <input type="text" placeholder="例：4月分会費" value="${row.name}" oninput="updateField('${type}',${row.id},'name',this.value)" /></div>
+      <div class="row-single"><p class="field-label">カテゴリ</p>
+        <select onchange="updateField('${type}',${row.id},'category',this.value)">
+          ${cats.map(c => `<option value="${c}" ${c===row.category?'selected':''}>${c}</option>`).join('')}
+        </select></div>
+      <div class="remove-row"><button class="remove-btn" onclick="removeRow('${type}',${row.id})">× 削除</button></div>
+    </div>`).join('');
+}
+
+function updateField(type, id, field, value) {
+  const arr = type === 'income' ? incomeRows : expenseRows;
+  const row = arr.find(r => r.id === id);
+  if (row) row[field] = value;
+  updateSummary();
+}
+
+function fmt(n) { return Math.round(n).toLocaleString('ja-JP'); }
+
+function getMonthKey(dateStr) {
+  const m = dateStr.match(/(\d+)\//);
+  if (!m) return null;
+  const month = parseInt(m[1]);
+  return month >= 4 ? `2026年${month}月` : `2027年${month}月`;
+}
+
+function filterRows(rows, selected) {
+  if (selected === '通年') return rows;
+  return rows.filter(r => getMonthKey(r.date) === selected);
+}
+
+function updateSummary() {
+  const selected = document.getElementById('target-month').value;
+  const fi = filterRows(incomeRows, selected);
+  const fe = filterRows(expenseRows, selected);
+  const ti = fi.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+  const te = fe.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+  const bal = ti - te;
+  document.getElementById('total-income').textContent = '¥' + fmt(ti);
+  document.getElementById('total-expense').textContent = '¥' + fmt(te);
+  const balEl = document.getElementById('total-balance');
+  balEl.textContent = (bal >= 0 ? '¥' : '▲¥') + fmt(Math.abs(bal));
+  balEl.className = 'metric-value ' + (bal >= 0 ? '' : 'expense');
+  updateReport(fi, fe, selected, ti, te, bal);
+}
+
+function updateReport(fi, fe, selected, ti, te, bal) {
+  if (incomeRows.length === 0 && expenseRows.length === 0) {
+    document.getElementById('export-text').textContent = '項目を入力するとレポートが生成されます'; return;
+  }
+  const sep = '─'.repeat(44);
+  let lines = [`【日野剣友会 ${selected} 収支報告】`, sep, `日付\t摘要\t収入\t支出\t残高`, sep];
+  let running = 0;
+  const allRows = [
+    ...fi.map(r => ({ ...r, type: 'income' })),
+    ...fe.map(r => ({ ...r, type: 'expense' }))
+  ].sort((a, b) => a.date.replace(/[^\d]/g,'').padStart(4,'0').localeCompare(b.date.replace(/[^\d]/g,'').padStart(4,'0')));
+  if (allRows.length === 0) { lines.push('（該当データなし）'); }
+  else {
+    allRows.forEach(r => {
+      const amt = parseFloat(r.amount) || 0;
+      if (r.type === 'income') running += amt; else running -= amt;
+      lines.push(`${r.date||'　'}\t${r.name||r.category}\t${r.type==='income'?fmt(amt):''}\t${r.type==='expense'?fmt(amt):''}\t${running>=0?'':' ▲'}${fmt(Math.abs(running))}`);
+    });
+  }
+  lines.push(sep, `合計\t\t${fmt(ti)}\t${fmt(te)}\t${bal>=0?'':' ▲'}${fmt(Math.abs(bal))}`);
+  document.getElementById('export-text').textContent = lines.join('\n');
+}
+
+async function saveToSheets() {
+  const allRows = [
+    ...incomeRows.map(r => ({ ...r, type: 'income' })),
+    ...expenseRows.map(r => ({ ...r, type: 'expense' }))
+  ].filter(r => r.amount);
+  if (allRows.length === 0) { setStatus('保存するデータがありません', 'error'); return; }
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true; setStatus('保存中...', '');
+  let ok = 0, ng = 0;
+  for (const row of allRows) {
+    try {
+      await fetch(GAS_URL, {
+        method: 'POST', mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: row.date, type: row.type === 'income' ? '収入' : '支出', name: row.name || row.category, category: row.category, amount: parseFloat(row.amount) || 0 })
+      });
+      ok++;
+    } catch(e) { ng++; }
+  }
+  btn.disabled = false;
+  setStatus(ng === 0 ? `✓ ${ok}件を保存しました` : `${ok}件成功、${ng}件失敗`, ng === 0 ? 'success' : 'error');
+}
+
+function setStatus(msg, type) {
+  const el = document.getElementById('save-status');
+  el.textContent = msg; el.className = 'save-status ' + type;
+}
+
+function copyReport() {
+  const text = document.getElementById('export-text').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = 'コピーしました ✓';
+    setTimeout(() => btn.textContent = 'レポートをコピー', 2000);
+  });
+}
+
+initMonth(); addRow('income'); addRow('expense');
+</script>
+</body>
+</html>
