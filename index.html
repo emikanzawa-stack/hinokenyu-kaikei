@@ -26,6 +26,8 @@
   .save-btn { width: 100%; font-size: 15px; padding: 14px; margin-bottom: 8px; background: #1a73e8; color: #fff; border: none; border-radius: 12px; cursor: pointer; font-weight: 500; }
   .save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .save-btn:active { background: #1557b0; }
+  .load-btn { width: 100%; font-size: 14px; padding: 12px; margin-bottom: 8px; background: #fff; border: 0.5px solid #1a73e8; border-radius: 12px; cursor: pointer; color: #1a73e8; font-weight: 500; }
+  .load-btn:active { background: #e8f0fe; }
   .save-status { font-size: 13px; text-align: center; margin-bottom: 16px; min-height: 20px; color: #666; }
   .save-status.success { color: #1e8a44; }
   .save-status.error { color: #d32f2f; }
@@ -37,7 +39,16 @@
   .metric-value.income { color: #1e8a44; }
   .metric-value.expense { color: #d32f2f; }
   .metric-wide { grid-column: 1 / -1; }
-  .export-area { background: #fff; border-radius: 12px; padding: 12px; font-size: 11px; line-height: 1.7; white-space: pre-wrap; font-family: 'Courier New', monospace; color: #333; margin-bottom: 10px; overflow-x: auto; border: 0.5px solid #e0e0e0; }
+  .report-wrap { background: #fff; border-radius: 12px; border: 0.5px solid #e0e0e0; overflow: hidden; margin-bottom: 10px; }
+  .report-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .report-table th { background: #f5f5f5; padding: 8px 10px; text-align: left; font-weight: 500; color: #666; border-bottom: 0.5px solid #e0e0e0; white-space: nowrap; }
+  .report-table td { padding: 8px 10px; border-bottom: 0.5px solid #f0f0f0; vertical-align: top; }
+  .report-table tr:last-child td { border-bottom: none; }
+  .report-table .num { text-align: right; }
+  .report-table .income-row td { background: #f8fff9; }
+  .report-table .expense-row td { background: #fff8f8; }
+  .report-table .total-row td { background: #f5f5f5; font-weight: 500; border-top: 0.5px solid #e0e0e0; }
+  .empty-msg { padding: 20px; text-align: center; color: #999; font-size: 13px; }
   .copy-btn { width: 100%; font-size: 14px; padding: 12px; background: #fff; border: 0.5px solid #ccc; border-radius: 12px; cursor: pointer; color: #333; }
   .copy-btn:active { background: #f0f0f0; }
 </style>
@@ -59,6 +70,7 @@
 <button class="add-btn" onclick="addRow('expense')">＋ 支出を追加</button>
 
 <button class="save-btn" id="save-btn" onclick="saveToSheets()">スプレッドシートに保存</button>
+<button class="load-btn" id="load-btn" onclick="loadFromSheets()">スプレッドシートから読み込む</button>
 <p class="save-status" id="save-status"></p>
 
 <hr class="divider">
@@ -78,9 +90,11 @@
   </div>
 </div>
 
-<p class="sec-label">レポート（コピー用）</p>
-<div class="export-area" id="export-text">項目を入力するとレポートが生成されます</div>
-<button class="copy-btn" onclick="copyReport()">レポートをコピー</button>
+<p class="sec-label">レポート</p>
+<div class="report-wrap">
+  <div id="report-table-container"><div class="empty-msg">項目を入力するとレポートが生成されます</div></div>
+</div>
+<button class="copy-btn" onclick="copyReport()">テキストをコピー</button>
 
 <script>
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbxhfufrynJCNH-HiELIJqiyAnNccmFuR1skIi86gE0oprwtFIT5TLc9e25wmJGojGwwbA/exec';
@@ -175,43 +189,79 @@ function updateSummary() {
 }
 
 function updateReport(fi, fe, selected, ti, te, bal) {
-  if (incomeRows.length === 0 && expenseRows.length === 0) {
-    document.getElementById('export-text').textContent = '項目を入力するとレポートが生成されます'; return;
-  }
-  const sep = '─'.repeat(44);
-  let lines = [`【日野剣友会 ${selected} 収支報告】`, sep, `日付\t摘要\t収入\t支出\t残高`, sep];
-  let running = 0;
+  const container = document.getElementById('report-table-container');
   const allRows = [
     ...fi.map(r => ({ ...r, type: 'income' })),
     ...fe.map(r => ({ ...r, type: 'expense' }))
   ].sort((a, b) => a.date.replace(/[^\d]/g,'').padStart(4,'0').localeCompare(b.date.replace(/[^\d]/g,'').padStart(4,'0')));
-  if (allRows.length === 0) { lines.push('（該当データなし）'); }
-  else {
-    allRows.forEach(r => {
-      const amt = parseFloat(r.amount) || 0;
-      if (r.type === 'income') running += amt; else running -= amt;
-      lines.push(`${r.date||'　'}\t${r.name||r.category}\t${r.type==='income'?fmt(amt):''}\t${r.type==='expense'?fmt(amt):''}\t${running>=0?'':' ▲'}${fmt(Math.abs(running))}`);
-    });
+
+  if (allRows.length === 0) {
+    container.innerHTML = '<div class="empty-msg">項目を入力するとレポートが生成されます</div>';
+    return;
   }
-  lines.push(sep, `合計\t\t${fmt(ti)}\t${fmt(te)}\t${bal>=0?'':' ▲'}${fmt(Math.abs(bal))}`);
-  document.getElementById('export-text').textContent = lines.join('\n');
+
+  let running = 0;
+  let rows = '';
+  allRows.forEach(r => {
+    const amt = parseFloat(r.amount) || 0;
+    if (r.type === 'income') running += amt; else running -= amt;
+    const rowClass = r.type === 'income' ? 'income-row' : 'expense-row';
+    const ic = r.type === 'income' ? '¥' + fmt(amt) : '';
+    const ec = r.type === 'expense' ? '¥' + fmt(amt) : '';
+    const bc = (running >= 0 ? '¥' : '▲¥') + fmt(Math.abs(running));
+    rows += `<tr class="${rowClass}">
+      <td>${r.date||'　'}</td>
+      <td>${r.name||r.category}</td>
+      <td class="num">${ic}</td>
+      <td class="num">${ec}</td>
+      <td class="num">${bc}</td>
+    </tr>`;
+  });
+
+  container.innerHTML = `
+    <table class="report-table">
+      <thead><tr>
+        <th>日付</th><th>摘要</th><th>収入</th><th>支出</th><th>残高</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr class="total-row">
+        <td colspan="2">合計</td>
+        <td class="num">¥${fmt(ti)}</td>
+        <td class="num">¥${fmt(te)}</td>
+        <td class="num">${bal>=0?'¥':'▲¥'}${fmt(Math.abs(bal))}</td>
+      </tr></tfoot>
+    </table>`;
 }
 
 async function saveToSheets() {
   const allRows = [
     ...incomeRows.map(r => ({ ...r, type: 'income' })),
     ...expenseRows.map(r => ({ ...r, type: 'expense' }))
-  ].filter(r => r.amount);
+  ].filter(r => r.amount)
+   .sort((a, b) => a.date.replace(/[^\d]/g,'').padStart(4,'0').localeCompare(b.date.replace(/[^\d]/g,'').padStart(4,'0')));
+
   if (allRows.length === 0) { setStatus('保存するデータがありません', 'error'); return; }
+
   const btn = document.getElementById('save-btn');
   btn.disabled = true; setStatus('保存中...', '');
+
+  let running = 0;
   let ok = 0, ng = 0;
   for (const row of allRows) {
+    const amt = parseFloat(row.amount) || 0;
+    if (row.type === 'income') running += amt; else running -= amt;
     try {
       await fetch(GAS_URL, {
         method: 'POST', mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: row.date, type: row.type === 'income' ? '収入' : '支出', name: row.name || row.category, category: row.category, amount: parseFloat(row.amount) || 0 })
+        body: JSON.stringify({
+          date: row.date,
+          type: row.type === 'income' ? '収入' : '支出',
+          name: row.name || row.category,
+          category: row.category,
+          amount: amt,
+          balance: running
+        })
       });
       ok++;
     } catch(e) { ng++; }
@@ -220,17 +270,59 @@ async function saveToSheets() {
   setStatus(ng === 0 ? `✓ ${ok}件を保存しました` : `${ok}件成功、${ng}件失敗`, ng === 0 ? 'success' : 'error');
 }
 
+async function loadFromSheets() {
+  const btn = document.getElementById('load-btn');
+  btn.disabled = true;
+  setStatus('読み込み中...', '');
+  try {
+    const res = await fetch(GAS_URL);
+    const json = await res.json();
+    if (json.result !== 'success') throw new Error(json.message);
+
+    incomeRows = [];
+    expenseRows = [];
+    rowId = 0;
+
+    json.data.forEach(row => {
+      const id = rowId++;
+      const type = row['種別'] === '収入' ? 'income' : 'expense';
+      const entry = {
+        id,
+        date: row['日付'] || '',
+        name: row['摘要'] || '',
+        category: row['カテゴリ'] || '',
+        amount: row['金額'] || ''
+      };
+      if (type === 'income') incomeRows.push(entry);
+      else expenseRows.push(entry);
+    });
+
+    renderRows('income');
+    renderRows('expense');
+    updateSummary();
+    setStatus(`✓ ${json.data.length}件を読み込みました`, 'success');
+  } catch(e) {
+    setStatus('読み込みに失敗しました', 'error');
+  }
+  btn.disabled = false;
+}
+
 function setStatus(msg, type) {
   const el = document.getElementById('save-status');
   el.textContent = msg; el.className = 'save-status ' + type;
 }
 
 function copyReport() {
-  const text = document.getElementById('export-text').textContent;
-  navigator.clipboard.writeText(text).then(() => {
+  const table = document.querySelector('.report-table');
+  if (!table) { setStatus('コピーするレポートがありません', 'error'); return; }
+  const rows = table.querySelectorAll('tr');
+  const lines = Array.from(rows).map(row =>
+    Array.from(row.querySelectorAll('th,td')).map(cell => cell.textContent.trim()).join('\t')
+  );
+  navigator.clipboard.writeText(lines.join('\n')).then(() => {
     const btn = document.querySelector('.copy-btn');
     btn.textContent = 'コピーしました ✓';
-    setTimeout(() => btn.textContent = 'レポートをコピー', 2000);
+    setTimeout(() => btn.textContent = 'テキストをコピー', 2000);
   });
 }
 
