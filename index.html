@@ -138,7 +138,7 @@ function renderRows(type) {
     <div class="entry-card">
       <div class="row">
         <div><p class="field-label">日付</p>
-          <input type="text" placeholder="例：4/5" value="${row.date}" oninput="updateField('${type}',${row.id},'date',this.value)" /></div>
+          <input type="date" value="${row.date}" oninput="updateField('${type}',${row.id},'date',this.value)" /></div>
         <div><p class="field-label">金額（円）</p>
           <input type="number" placeholder="0" value="${row.amount}" min="0" step="100" oninput="updateField('${type}',${row.id},'amount',this.value)" /></div>
       </div>
@@ -255,7 +255,7 @@ async function saveToSheets() {
         method: 'POST', mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          date: row.date,
+          date: row.date ? new Date(row.date + 'T00:00:00').toLocaleDateString('ja-JP') : '',
           type: row.type === 'income' ? '収入' : '支出',
           name: row.name || row.category,
           category: row.category,
@@ -268,6 +268,20 @@ async function saveToSheets() {
   }
   btn.disabled = false;
   setStatus(ng === 0 ? `✓ ${ok}件を保存しました` : `${ok}件成功、${ng}件失敗`, ng === 0 ? 'success' : 'error');
+}
+
+function formatDate(val) {
+  if (!val) return '';
+  if (typeof val === 'string' && val.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const parts = val.split('-');
+    return parseInt(parts[1]) + '/' + parseInt(parts[2]);
+  }
+  if (!val) return '';
+  if (typeof val === 'string' && val.includes('T')) {
+    const d = new Date(val);
+    return (d.getMonth() + 1) + '/' + d.getDate();
+  }
+  return String(val);
 }
 
 async function loadFromSheets() {
@@ -288,7 +302,7 @@ async function loadFromSheets() {
       const type = row['種別'] === '収入' ? 'income' : 'expense';
       const entry = {
         id,
-        date: row['日付'] || '',
+        date: formatDate(row['日付']),
         name: row['摘要'] || '',
         category: row['カテゴリ'] || '',
         amount: row['金額'] || ''
